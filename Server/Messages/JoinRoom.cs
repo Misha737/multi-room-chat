@@ -21,9 +21,9 @@ namespace Server.Messages
         public override byte[] Serialize()
         {
             byte tag = (byte)Tag.JoinRoom;
-            byte[] data = ClientInfo.Serialize();
-            int length = data.Length;
-            return [tag, .. BitConverter.GetBytes(length), ..data];
+            byte[] clientInfoData = ClientInfo.Serialize();
+            int length = clientInfoData.Length;
+            return [tag, .. BitConverter.GetBytes(length), ..clientInfoData];
         }
     }
 }

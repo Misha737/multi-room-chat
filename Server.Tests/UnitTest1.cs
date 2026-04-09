@@ -12,10 +12,12 @@ public class UnitTest1
     {
         int Id = 555;
         string Name = "TestName";
-        byte[] Bytes = [.. BitConverter.GetBytes(Id), .. Encoding.UTF8.GetBytes(Name)];
+        int RoomId = 123;
+        byte[] Bytes = [.. BitConverter.GetBytes(Id), .. BitConverter.GetBytes(RoomId), .. Encoding.UTF8.GetBytes(Name)];
 
         ClientInfo clientInfo = ClientInfo.Deserialize(Bytes);
         Assert.Equal(Id, clientInfo.Id);
+        Assert.Equal(RoomId, clientInfo.RoomId);
         Assert.Equal(Name, clientInfo.Name);
     }
 
@@ -24,9 +26,10 @@ public class UnitTest1
     {
         int Id = 555;
         string Name = "TestName";
-        byte[] Bytes = [.. BitConverter.GetBytes(Id), .. Encoding.UTF8.GetBytes(Name)];
+        int RoomId = 123;
+        byte[] Bytes = [.. BitConverter.GetBytes(Id), .. BitConverter.GetBytes(RoomId), .. Encoding.UTF8.GetBytes(Name)];
 
-        ClientInfo clientInfo = new ClientInfo(Id, Name);
+        ClientInfo clientInfo = new ClientInfo(Id, RoomId, Name);
         byte[] actual = clientInfo.Serialize();
 
         Assert.Equal(Bytes, actual);
@@ -38,8 +41,10 @@ public class UnitTest1
         byte tag = (byte)Tag.JoinRoom;
         int Id = 555;
         string Name = "TestName";
-        byte[] Bytes = [tag, .. BitConverter.GetBytes(4 + Name.Length), .. BitConverter.GetBytes(Id), .. Encoding.UTF8.GetBytes(Name)];
+        int RoomId = 123;
+        byte[] Bytes = [tag, .. BitConverter.GetBytes(4 + Name.Length), .. BitConverter.GetBytes(Id), .. BitConverter.GetBytes(RoomId), .. Encoding.UTF8.GetBytes(Name)];
 
         JoinRoom joinRoom = JoinRoom.Deserialize(Bytes);
+
     }
 }
