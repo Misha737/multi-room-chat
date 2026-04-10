@@ -1,5 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace Server.Messages;
@@ -7,10 +5,9 @@ namespace Server.Messages;
 public class ErrorStatus : Message
 {
     public string ErrorMessage { get; set; }
+
     public ErrorStatus(string errorMessage) : base(Tag.ErrorStatus)
-    {
-        ErrorMessage = errorMessage;
-    }
+        => ErrorMessage = errorMessage;
 
     public static ErrorStatus Deserialize(ReadOnlySpan<byte> data)
     {
@@ -21,8 +18,12 @@ public class ErrorStatus : Message
 
     public override byte[] SerializePayload()
     {
-        byte[] messageBytes = Encoding.UTF8.GetBytes(ErrorMessage);
-        return messageBytes;
+        byte[] msgBytes = Encoding.UTF8.GetBytes(ErrorMessage);
+        List<byte> bytes =
+        [
+            ..BitConverter.GetBytes(msgBytes.Length),
+            ..msgBytes
+        ];
+        return bytes.ToArray();
     }
 }
-
