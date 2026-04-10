@@ -13,6 +13,9 @@ internal class Server
     private Socket ServerSocket;
     private CancellationTokenSource CancellationTokenSource;
     private CancellationToken CancellationToken;
+    private Acceptor acceptor;
+    private List<ClientHandler> clients;
+    private readonly object _lock = new object();
     public Server(string address, int port)
     {
         ServerIP = new IPEndPoint(IPAddress.Parse(address), port);
@@ -20,22 +23,12 @@ internal class Server
         ServerSocket.Bind(ServerIP);
         CancellationTokenSource = new CancellationTokenSource();
         CancellationToken = CancellationTokenSource.Token;
+        acceptor = new Acceptor(CancellationToken, clients);
     }
 
     public void Start()
     {
         ServerSocket.Listen(Backlog);
-        while (!CancellationToken.IsCancellationRequested)
-        {
-            Socket clientSocket;
-            try
-            {
-                clientSocket = ServerSocket.Accept();
-            }
-            catch (SocketException)
-            {
-                continue;
-            }
-        }
+        acceptor.RunThread(ServerSocket);
     }
 }
