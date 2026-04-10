@@ -394,9 +394,22 @@
           "build/net8.0/xunit.runner.visualstudio.props": {}
         }
       },
+      "ApplicationProtocol/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/ApplicationProtocol.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/ApplicationProtocol.dll": {}
+        }
+      },
       "Server/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "ApplicationProtocol": "1.0.0"
+        },
         "compile": {
           "bin/placeholder/Server.dll": {}
         },
@@ -913,6 +926,11 @@
         "xunit.runner.visualstudio.3.1.4.nupkg.sha512",
         "xunit.runner.visualstudio.nuspec"
       ]
+    },
+    "ApplicationProtocol/1.0.0": {
+      "type": "project",
+      "path": "../ApplicationProtocol/ApplicationProtocol.csproj",
+      "msbuildProject": "../ApplicationProtocol/ApplicationProtocol.csproj"
     },
     "Server/1.0.0": {
       "type": "project",

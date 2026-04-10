@@ -1,19 +1,19 @@
 using System.Text;
 
-namespace Server.Messages;
+namespace Application;
 
-public class FileRequestMessage : Message
+public class FileRejectMessage : Message
 {
     public string FileName { get; set; }
 
-    public FileRequestMessage(string fileName) : base(Tag.FileRequest)
+    public FileRejectMessage(string fileName) : base(Tag.FileReject)
         => FileName = fileName;
 
-    public static FileRequestMessage Deserialize(ReadOnlySpan<byte> data)
+    public static FileRejectMessage Deserialize(ReadOnlySpan<byte> data)
     {
         int len = BitConverter.ToInt32(data);
         string fileName = Encoding.UTF8.GetString(data.Slice(4, len));
-        return new FileRequestMessage(fileName);
+        return new FileRejectMessage(fileName);
     }
 
     public override byte[] SerializePayload()

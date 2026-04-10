@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Server;
+namespace Application;
 
 public class ClientInfo
 {

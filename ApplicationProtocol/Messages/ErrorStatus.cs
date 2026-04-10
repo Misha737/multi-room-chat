@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Server.Messages;
+namespace Application;
 
 public class ErrorStatus : Message
 {

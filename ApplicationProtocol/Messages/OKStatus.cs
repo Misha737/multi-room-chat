@@ -1,4 +1,4 @@
-namespace Server.Messages;
+namespace Application;
 
 public class OKStatus : Message
 {
