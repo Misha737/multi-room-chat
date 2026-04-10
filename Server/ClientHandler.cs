@@ -1,5 +1,4 @@
 using Application;
-using Server.Messages;
 using System.Net.Sockets;
 
 namespace Server;
@@ -30,8 +29,8 @@ public class ClientHandler
 
     public void Start()
     {
-        new Thread(ReceiveLoop) { IsBackground = true }.Start();
-        new Thread(SendLoop) { IsBackground = true }.Start();
+        new Thread(ReceiveLoop) { IsBackground = false }.Start();
+        new Thread(SendLoop) { IsBackground = false }.Start();
     }
 
     public void EnqueueSend(byte[] data)

@@ -19,7 +19,7 @@ internal class Acceptor
 
     public void Start()
     {
-        new Thread(AcceptLoop) { IsBackground = true }.Start();
+        new Thread(AcceptLoop) { IsBackground = false }.Start();
     }
 
     private void AcceptLoop()

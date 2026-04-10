@@ -27,7 +27,7 @@ public class Room
 
     public void Start()
     {
-        Thread broadcastThread = new Thread(BroadcastLoop) { IsBackground = true };
+        Thread broadcastThread = new Thread(BroadcastLoop) { IsBackground = false };
         broadcastThread.Start();
     }
 

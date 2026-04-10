@@ -34,7 +34,7 @@ public class ChatServer
 
         new Acceptor(_serverSocket, _rooms, _clientPool, _cts.Token).Start();
 
-        new Thread(CliLoop) { IsBackground = true, Name = "Server-CLI" }.Start();
+        new Thread(CliLoop) { IsBackground = false }.Start();
     }
 
     public void Stop()
