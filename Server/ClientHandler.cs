@@ -1,112 +1,200 @@
-﻿using Server.Messages;
-using System;
-using System.Collections.Generic;
-using System.Data;
+using Server.Messages;
 using System.Net.Sockets;
-using System.Text;
 
 namespace Server;
 
 public class ClientHandler
 {
     public Socket ClientSocket { get; init; }
-    private CancellationToken cancellationToken;
-    private Thread ReceiveThread;
-    private Thread SendThread;
-    private List<Room> rooms;
-    private Room? _room;
-    public ClientHandler(Socket clientSocket, List<Room> rooms, CancellationToken cancellationToken)
+    public int ClientId { get; private set; }
+    public string Name { get; private set; } = "Unknown";
+
+    private static int _nextId = 0;
+
+    private readonly List<Room> _rooms;
+    private Room? _currentRoom;
+    private readonly CancellationToken _ct;
+
+    private readonly Queue<byte[]> _sendQueue = new();
+    private readonly object _sendQueueLock = new();
+    private readonly SemaphoreSlim _sendAvailable = new SemaphoreSlim(0);
+
+    public ClientHandler(Socket clientSocket, List<Room> rooms, CancellationToken ct)
     {
-        this.ClientSocket = clientSocket;
-        this.cancellationToken = cancellationToken;
-        this.rooms = rooms;
-        ReceiveThread = new Thread(ReceivingThread);
-        SendThread = new Thread(SendingThread);
+        ClientSocket = clientSocket;
+        _rooms = rooms;
+        _ct = ct;
+        ClientId = Interlocked.Increment(ref _nextId);
     }
 
     public void Start()
     {
-        ReceiveThread.Start();
-        SendThread.Start();
+        new Thread(ReceiveLoop) { IsBackground = true }.Start();
+        new Thread(SendLoop) { IsBackground = true }.Start();
     }
 
-    private async Task ReceivingThread()
+    public void EnqueueSend(byte[] data)
     {
-        while(!cancellationToken.IsCancellationRequested)
+        lock (_sendQueueLock) _sendQueue.Enqueue(data);
+        _sendAvailable.Release();
+    }
+
+    private void SendLoop()
+    {
+        try
         {
-            Tag tag = await ReceiveTag();
-            int length = await ReceiveLength();
-            byte[] payload = await ReceiveExact(length);
-
-            if (tag == Tag.JoinRoom)
+            while (!_ct.IsCancellationRequested)
             {
-                JoinRoom joinRoom = JoinRoom.Deserialize(payload);
-
-                foreach (Room room in rooms)
+                _sendAvailable.Wait(_ct);
+                byte[] data;
+                lock (_sendQueueLock)
                 {
-                    if (room.Id == joinRoom.ClientInfo.RoomId)
-                    {
-                        _room = room;
-                        OKStatus okStatus = new OKStatus();
-                        await SendExact(okStatus.Serialize());
-                        break;
-                    }
+                    if (_sendQueue.Count == 0) continue;
+                    data = _sendQueue.Dequeue();
                 }
-
-                ErrorStatus errorStatus = new ErrorStatus("Requested room not found.");
-                await SendExact(errorStatus.Serialize());
-
+                SendExact(data);
             }
-            else
+        }
+        catch { }
+    }
+
+    private void ReceiveLoop()
+    {
+        try
+        {
+            PerformJoinHandshake();
+
+            while (!_ct.IsCancellationRequested)
             {
-                if(_room == null)
-                {
-                    ErrorStatus errorStatus = new ErrorStatus("You need to join a room first.");
-                    await SendExact(errorStatus.Serialize());
-                }
+                var (tag, payload) = ReceiveMessage();
+                HandleMessage(tag, payload);
             }
+        }
+        catch (Exception ex) when (ex is SocketException or OperationCanceledException or EndOfStreamException)
+        {
+            Console.WriteLine($"[Server] CLIENT {Name} disconnected.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Server] CLIENT {Name} error: {ex.Message}");
+        }
+        finally
+        {
+            _currentRoom?.RemoveClient(this);
+            try { ClientSocket.Close(); } catch { }
         }
     }
 
-    private void SendingThread()
+    private void PerformJoinHandshake()
     {
-        while (!cancellationToken.IsCancellationRequested)
+        var (tag, payload) = ReceiveMessage();
+
+        if (tag != Tag.JoinRoom)
         {
+            SendExact(new ErrorStatus("First message must be JoinRoom.").Serialize());
+            throw new Exception("Protocol error: expected JoinRoom.");
+        }
+
+        var joinRoom = JoinRoom.Deserialize(payload);
+        Name = joinRoom.ClientInfo.Name;
+        int requestedRoomId = joinRoom.ClientInfo.RoomId;
+
+        Room? room = _rooms.FirstOrDefault(r => r.Id == requestedRoomId);
+        if (room is null)
+        {
+            SendExact(new ErrorStatus($"Room {requestedRoomId} does not exist.").Serialize());
+            throw new Exception($"Room {requestedRoomId} not found.");
+        }
+
+        _currentRoom = room;
+        SendExact(new OKStatus().Serialize());
+        room.AddClient(this);
+    }
+
+    private void HandleMessage(Tag tag, byte[] payload)
+    {
+        if (_currentRoom is null)
+        {
+            EnqueueSend(new ErrorStatus("Join a room first.").Serialize());
+            return;
+        }
+
+        switch (tag)
+        {
+            case Tag.ChatMessage:
+                _currentRoom.EnqueueMessage(this, ChatMessage.Deserialize(payload));
+                break;
+
+            case Tag.ChangeRoom:
+                HandleChangeRoom(ChangeRoomMessage.Deserialize(payload).NewRoomId);
+                break;
+
+            case Tag.FileData:
+                _currentRoom.EnqueueMessage(this, FileDataMessage.Deserialize(payload));
+                break;
+
+            case Tag.FileAccept:
+                _currentRoom.EnqueueMessage(this, FileAcceptMessage.Deserialize(payload));
+                break;
+
+            case Tag.FileReject:
+                _currentRoom.EnqueueMessage(this, FileRejectMessage.Deserialize(payload));
+                break;
+
+            case Tag.FileRequest:
+                _currentRoom.EnqueueMessage(this, FileRequestMessage.Deserialize(payload));
+                break;
+
+            default:
+                EnqueueSend(new ErrorStatus($"Unknown tag: {tag}").Serialize());
+                break;
         }
     }
 
-    private async Task<Tag> ReceiveTag() => (Tag)(await ReceiveExact(1))[0];
-
-    private async Task<int> ReceiveLength() => BitConverter.ToInt32(await ReceiveExact(4));
-
-    private async Task<byte[]> ReceiveExact(int byteCount)
+    private void HandleChangeRoom(int newRoomId)
     {
-        byte[] buffer = new byte[byteCount];
+        Room? newRoom = _rooms.FirstOrDefault(r => r.Id == newRoomId);
+        if (newRoom is null)
+        {
+            EnqueueSend(new ErrorStatus($"Room {newRoomId} does not exist.").Serialize());
+            return;
+        }
+
+        _currentRoom?.RemoveClient(this);
+        _currentRoom = newRoom;
+        EnqueueSend(new OKStatus().Serialize());
+        newRoom.AddClient(this);
+    }
+
+    private (Tag tag, byte[] payload) ReceiveMessage()
+    {
+        Tag tag = (Tag)ReceiveExact(1)[0];
+        int length = BitConverter.ToInt32(ReceiveExact(4));
+        byte[] payload = length > 0 ? ReceiveExact(length) : Array.Empty<byte>();
+        return (tag, payload);
+    }
+
+    private byte[] ReceiveExact(int count)
+    {
+        byte[] buffer = new byte[count];
         int received = 0;
-        while (received < byteCount)
+        while (received < count)
         {
-            int bytesRead = await ClientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, received, byteCount - received), SocketFlags.None, cancellationToken);
-            if (bytesRead == 0)
-            {
-                throw new SocketException();
-            }
-            received += bytesRead;
+            int n = ClientSocket.Receive(buffer, received, count - received, SocketFlags.None);
+            if (n == 0) throw new EndOfStreamException("Connection closed by client.");
+            received += n;
         }
-
         return buffer;
     }
 
-    private async Task SendExact(byte[] data)
+    private void SendExact(byte[] data)
     {
         int sent = 0;
         while (sent < data.Length)
         {
-            int bytesSent = await ClientSocket.SendAsync(new ArraySegment<byte>(data, sent, data.Length - sent), SocketFlags.None, cancellationToken);
-            if (bytesSent == 0)
-            {
-                throw new SocketException();
-            }
-            sent += bytesSent;
+            int n = ClientSocket.Send(data, sent, data.Length - sent, SocketFlags.None);
+            if (n == 0) throw new EndOfStreamException("Connection closed by client.");
+            sent += n;
         }
     }
 }
