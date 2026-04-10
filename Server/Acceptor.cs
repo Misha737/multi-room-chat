@@ -11,7 +11,6 @@ internal class Acceptor
 {
     public const int Backlog = 10;
 
-    private Thread acceptorThread;
     public Socket? ServerSocket { get; set; }
     public ClientPool ClientPool { get; init; }
     private CancellationToken cancellationToken;
@@ -20,17 +19,12 @@ internal class Acceptor
     {
         ClientPool = clientPool;
         cancellationToken = ct;
-        acceptorThread = new Thread( () =>
-        {
-            AcceptHandler().Wait();
-        });
-
     }
 
     public void RunThread(Socket serverSocket)
     {
         ServerSocket = serverSocket;
-        acceptorThread.Start();
+        Task.Run(() => AcceptHandler());
     }
 
     private async Task AcceptHandler()

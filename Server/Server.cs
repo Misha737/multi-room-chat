@@ -24,7 +24,7 @@ internal class Server
         CancellationTokenSource = new();
         CancellationToken = CancellationTokenSource.Token;
         clientPool = new();
-        rooms = new();
+        rooms = [new Room(), new Room()];
         acceptor = new(CancellationToken, clientPool);
     }
 

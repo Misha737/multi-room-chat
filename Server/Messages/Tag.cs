@@ -12,5 +12,7 @@ public enum Tag : byte
     FileOffer = 4,
     FileAccept = 5,
     FileReject = 6,
-    FileData = 7
+    FileData = 7,
+    OKStatus = 8,
+    ErrorStatus = 9
 }

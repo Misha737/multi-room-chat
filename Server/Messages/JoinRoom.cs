@@ -7,7 +7,7 @@ namespace Server.Messages;
 public class JoinRoom : Message
 {
     public ClientInfo ClientInfo { get; set; }
-    private JoinRoom(ClientInfo clientInfo) : base()
+    private JoinRoom(ClientInfo clientInfo) : base(Tag.JoinRoom)
     {
         ClientInfo = clientInfo;
     }
@@ -18,14 +18,9 @@ public class JoinRoom : Message
         return new JoinRoom(clientInfo);
     }
 
-    public override byte[] Serialize()
+    public override byte[] SerializePayload()
     {
-        byte tag = (byte)Tag.JoinRoom;
         byte[] clientInfoData = ClientInfo.Serialize();
-        int length = clientInfoData.Length;
-        return [
-            tag,
-            .. BitConverter.GetBytes(length),
-            ..clientInfoData];
+        return clientInfoData;
     }
 }
