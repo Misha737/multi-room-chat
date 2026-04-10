@@ -20,14 +20,20 @@ public class ClientInfo
     {
         int id = BitConverter.ToInt32(raw);
         int roomId = BitConverter.ToInt32(raw.Slice(4));
-        string name = Encoding.UTF8.GetString(raw.Slice(8));
+        int lengthName = BitConverter.ToInt32(raw.Slice(8));
+        string name = Encoding.UTF8.GetString(raw.Slice(12, lengthName));
 
         return new ClientInfo(id, roomId, name);
     }
 
     public byte[] Serialize()
     {
-        List<byte> bytes = [.. BitConverter.GetBytes(Id), .. BitConverter.GetBytes(RoomId), .. Encoding.UTF8.GetBytes(Name)];
+        int lengthName = Encoding.UTF8.GetByteCount(Name);
+        List<byte> bytes = [
+            .. BitConverter.GetBytes(Id),
+            .. BitConverter.GetBytes(RoomId),
+            .. BitConverter.GetBytes(lengthName),
+            .. Encoding.UTF8.GetBytes(Name)];
         return bytes.ToArray();
     }
 }

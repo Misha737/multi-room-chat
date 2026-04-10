@@ -14,16 +14,18 @@ internal class Server
     private CancellationTokenSource CancellationTokenSource;
     private CancellationToken CancellationToken;
     private Acceptor acceptor;
-    private List<ClientHandler> clients;
-    private readonly object _lock = new object();
+    private ClientPool clientPool;
+    private List<Room> rooms;
     public Server(string address, int port)
     {
         ServerIP = new IPEndPoint(IPAddress.Parse(address), port);
         ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         ServerSocket.Bind(ServerIP);
-        CancellationTokenSource = new CancellationTokenSource();
+        CancellationTokenSource = new();
         CancellationToken = CancellationTokenSource.Token;
-        acceptor = new Acceptor(CancellationToken, clients);
+        clientPool = new();
+        rooms = new();
+        acceptor = new(CancellationToken, clientPool);
     }
 
     public void Start()

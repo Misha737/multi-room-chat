@@ -13,18 +13,16 @@ internal class Acceptor
 
     private Thread acceptorThread;
     public Socket? ServerSocket { get; set; }
-    public List<ClientHandler> Clients { get; init; }
+    public ClientPool ClientPool { get; init; }
     private CancellationToken cancellationToken;
-    private readonly object _lock;
 
-    public Acceptor(CancellationToken ct, List<ClientHandler> clients, object _lock)
+    public Acceptor(CancellationToken ct, ClientPool clientPool)
     {
-        Clients = clients;
+        ClientPool = clientPool;
         cancellationToken = ct;
-        this._lock = _lock;
-        acceptorThread = new Thread(async () =>
+        acceptorThread = new Thread( () =>
         {
-            await AcceptHandler();
+            AcceptHandler().Wait();
         });
 
     }
@@ -44,9 +42,7 @@ internal class Acceptor
             {
                 clientSocket = await ServerSocket!.AcceptAsync();
                 ClientHandler clientHandler = new ClientHandler(clientSocket, cancellationToken);
-                lock (_lock) {
-                    Clients.Add(clientHandler);
-                }
+                ClientPool.PushClient(clientHandler);
             }
             catch (SocketException)
             {
