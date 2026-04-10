@@ -1,46 +1,45 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
 
 namespace Server;
 
 internal class Acceptor
 {
-    public const int Backlog = 10;
+    private readonly Socket _serverSocket;
+    private readonly List<Room> _rooms;
+    private readonly ClientPool _clientPool;
+    private readonly CancellationToken _ct;
 
-    public Socket? ServerSocket { get; set; }
-    public ClientPool ClientPool { get; init; }
-    private CancellationToken cancellationToken;
-
-    public Acceptor(CancellationToken ct, ClientPool clientPool)
+    public Acceptor(Socket serverSocket, List<Room> rooms, ClientPool clientPool, CancellationToken ct)
     {
-        ClientPool = clientPool;
-        cancellationToken = ct;
+        _serverSocket = serverSocket;
+        _rooms = rooms;
+        _clientPool = clientPool;
+        _ct = ct;
     }
 
-    public void RunThread(Socket serverSocket)
+    public void Start()
     {
-        ServerSocket = serverSocket;
-        Task.Run(() => AcceptHandler());
+        new Thread(AcceptLoop) { IsBackground = true }.Start();
     }
 
-    private async Task AcceptHandler()
+    private void AcceptLoop()
     {
-        while (!cancellationToken.IsCancellationRequested)
+        Console.WriteLine("[Acceptor] Listening for connections…");
+        while (!_ct.IsCancellationRequested)
         {
-            Socket clientSocket;
             try
             {
-                clientSocket = await ServerSocket!.AcceptAsync();
-                ClientHandler clientHandler = new ClientHandler(clientSocket, cancellationToken);
-                ClientPool.PushClient(clientHandler);
+                Socket clientSocket = _serverSocket.Accept();
+                Console.WriteLine($"[Acceptor] New connection from {clientSocket.RemoteEndPoint}");
+
+                ClientHandler handler = new ClientHandler(clientSocket, _rooms, _ct);
+                _clientPool.Add(handler);
+                handler.Start();
             }
             catch (SocketException)
             {
-                continue;
+                if (!_ct.IsCancellationRequested)
+                    Console.WriteLine("[Acceptor] Accept error, retrying…");
             }
         }
     }

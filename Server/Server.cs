@@ -1,36 +1,67 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 
 namespace Server;
 
-internal class Server
+public class ChatServer
 {
-    public const int Backlog = 10;
-    public IPEndPoint ServerIP { get; init; }
-    private Socket ServerSocket;
-    private CancellationTokenSource CancellationTokenSource;
-    private CancellationToken CancellationToken;
-    private Acceptor acceptor;
-    private ClientPool clientPool;
-    private List<Room> rooms;
-    public Server(string address, int port)
+    private readonly IPEndPoint _endpoint;
+    private readonly Socket _serverSocket;
+    private readonly List<Room> _rooms;
+    private readonly ClientPool _clientPool = new();
+    private readonly CancellationTokenSource _cts = new();
+
+    public ChatServer(string address, int port)
     {
-        ServerIP = new IPEndPoint(IPAddress.Parse(address), port);
-        ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        ServerSocket.Bind(ServerIP);
-        CancellationTokenSource = new();
-        CancellationToken = CancellationTokenSource.Token;
-        clientPool = new();
-        rooms = [new Room(), new Room()];
-        acceptor = new(CancellationToken, clientPool);
+        _endpoint = new IPEndPoint(IPAddress.Parse(address), port);
+        _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        _serverSocket.Bind(_endpoint);
+
+        _rooms = new List<Room>
+        {
+            new Room(1, "General"),
+            new Room(2, "Random")
+        };
     }
 
     public void Start()
     {
-        ServerSocket.Listen(Backlog);
-        acceptor.RunThread(ServerSocket);
+        foreach (Room room in _rooms)
+            room.Start();
+
+        _serverSocket.Listen(10);
+        Console.WriteLine($"[Server] Listening on {_endpoint}");
+
+        new Acceptor(_serverSocket, _rooms, _clientPool, _cts.Token).Start();
+
+        new Thread(CliLoop) { IsBackground = true, Name = "Server-CLI" }.Start();
+    }
+
+    public void Stop()
+    {
+        _cts.Cancel();
+        _serverSocket.Close();
+    }
+
+
+    private void CliLoop()
+    {
+        Console.WriteLine("[Server CLI] Commands: /rooms, /quit");
+        while (true)
+        {
+            string? input = Console.ReadLine();
+            if (input is null) continue;
+
+            if (input.Trim() == "/rooms")
+            {
+                foreach (Room r in _rooms)
+                    Console.WriteLine($"  Room {r.Id} \"{r.Name}\" – {r.ClientCount} client(s)");
+            }
+            else if (input.Trim() == "/quit")
+            {
+                Stop();
+                break;
+            }
+        }
     }
 }
